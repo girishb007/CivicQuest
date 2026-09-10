@@ -27,6 +27,8 @@ The guiding principle is: **reporting matters, fixing matters more**.
 This is a design-first product repository. There is no production application or local development stack yet.
 
 - Product vision: [CivicQuest Project Vision](CivicQuest_Project_Vision.md)
+- Product vision hub: [CivicQuest Product Vision Hub](https://girishbisane8668.atlassian.net/wiki/spaces/~635304b6fc0cc7a600add921/pages/393217/CivicQuest+Product+Vision+Hub)
+- Product vision slides: [CivicQuest Product Vision PDF](CivicQuest_Product_Vision.pdf)
 - Figma concept: [CivicQuest - Mumbai Product Vision](https://www.figma.com/design/43BWAaDcCrxYLYROLAdOvM/CivicQuest-%E2%80%94-Mumbai-Product-Vision?node-id=1-2&p=f&t=WLBnPNu84pLUJdcw-0)
 - Target pilot geography: Mumbai, India
 - Intended platform: mobile-first
