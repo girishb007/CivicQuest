@@ -1470,3 +1470,435 @@ The current concept work includes:
 - Guest-first onboarding model.
 
 This document should serve as the baseline product brief for future design, engineering, open-source planning, and stakeholder discussions.
+
+---
+
+## 36. Product Data Model
+
+The data model should support guest-first participation, geospatial discovery,
+community attention, accountability, verified civic action, and an auditable XP
+history. The model below is a product-level contract rather than a final database
+schema.
+
+### 36.1 Core Entities
+
+#### User
+
+Represents a claimed CivicQuest identity. Guest activity may exist before a User
+record is created.
+
+```text
+User
+  id
+  username
+  display_name
+  account_state             # GUEST, ACTIVE, SUSPENDED, DELETED
+  home_city
+  xp_total
+  level
+  credibility_score
+  impact_streak_days
+  created_at
+  updated_at
+```
+
+#### GuestSession
+
+Temporarily associates reports and XP events with a device or anonymous session
+until the user claims the progress. It must not store unnecessary personal data.
+
+```text
+GuestSession
+  id
+  device_reference
+  claim_status              # UNCLAIMED, CLAIMED, EXPIRED
+  expires_at
+  created_at
+```
+
+#### Report
+
+Represents a Places issue or Civic Catch submitted by a citizen.
+
+```text
+Report
+  id
+  reporter_user_id          # nullable while guest activity is unclaimed
+  guest_session_id          # nullable after account claim
+  report_type               # PLACE or CIVIC_CATCH
+  category
+  status                    # SUBMITTED, SCREENED, VERIFIED, ACTIONED,
+                            # RESOLVED, REJECTED, DISPUTED, CLOSED
+  description
+  evidence_media_id
+  location_point
+  address_text
+  city
+  ward_id
+  authority_id
+  severity
+  credibility_at_submission
+  created_at
+  updated_at
+```
+
+#### ReportVote and Verification
+
+Votes signal that a report deserves attention; they are not proof. Verification
+records whether a report or resolution was checked.
+
+```text
+ReportVote
+  id
+  report_id
+  user_id                    # nullable for supported guest voting
+  guest_session_id           # nullable for authenticated voting
+  created_at
+
+Verification
+  id
+  target_type                # REPORT or RESOLUTION
+  target_id
+  verifier_user_id
+  verification_type         # COMMUNITY, MODERATOR, AUTHORITY, ORGANIZER
+  result                     # CONFIRMED, NOT_FOUND, DISPUTED
+  notes
+  created_at
+```
+
+#### Hotspot, Authority, and AdministrativeBoundary
+
+Hotspots aggregate related reports in a geographic area. Administrative boundaries
+map a location to the responsible civic owner.
+
+```text
+Hotspot
+  id
+  area_name
+  center_point
+  radius_meters
+  ward_id
+  authority_id
+  status                    # ACTIVE, ACTIONED, RESOLVED, CLOSED
+  active_report_count
+  upvote_count
+  score
+  score_updated_at
+  created_at
+  updated_at
+
+AdministrativeBoundary
+  id
+  boundary_type              # CITY, WARD, CONSTITUENCY
+  name
+  geometry
+  parent_boundary_id
+  source_reference
+  valid_from
+  valid_until
+
+Authority
+  id
+  name
+  authority_type             # MUNICIPAL_BODY, WARD, DEPARTMENT, RAILWAY,
+                             # NGO, OTHER
+  jurisdiction_boundary_id
+  contact_reference
+  active
+
+Representative
+  id
+  name
+  role                       # COUNCILLOR, MLA, MP, OTHER
+  jurisdiction_boundary_id
+  source_reference
+  term_start
+  term_end
+  active
+```
+
+#### CivicAction and ActionParticipation
+
+These entities model positive offline participation and its verification workflow.
+
+```text
+CivicAction
+  id
+  organizer_id
+  name
+  description
+  start_time
+  end_time
+  location_point
+  location_name
+  capacity
+  xp_reward
+  status                    # DRAFT, PUBLISHED, FULL, COMPLETED, CANCELLED
+  created_at
+
+ActionParticipation
+  id
+  action_id
+  user_id
+  joined_at
+  checked_in_at
+  before_media_id
+  after_media_id
+  team_media_id
+  verification_status       # PENDING, VERIFIED, REJECTED
+  xp_awarded
+  completed_at
+```
+
+#### Media, Resolution, and Progress
+
+Media is stored as metadata while the binary object lives in object storage.
+XP is event-based so awards can be audited, reversed, and explained.
+
+```text
+Media
+  id
+  owner_user_id
+  storage_key
+  media_type                 # IMAGE or VIDEO
+  content_hash
+  moderation_status
+  captured_at
+  created_at
+
+Resolution
+  id
+  report_id
+  submitted_by_user_id
+  action_description
+  after_media_id
+  status                    # SUBMITTED, VERIFIED, DISPUTED, REJECTED
+  verified_at
+  created_at
+
+XPEvent
+  id
+  user_id
+  source_type               # REPORT, VERIFICATION, RESOLUTION, ACTION,
+                            # BADGE, ADMIN_ADJUSTMENT
+  source_id
+  points
+  reason
+  idempotency_key
+  created_at
+
+CivicDexEntry
+  user_id
+  category
+  rarity
+  first_discovered_at
+  verification_status
+
+QuestProgress
+  user_id
+  quest_id
+  progress
+  completed_at
+
+LeaderboardSnapshot
+  id
+  scope                     # CITY, WARD, GLOBAL
+  scope_id
+  period_start
+  period_end
+  user_id
+  rank
+  xp_total
+  generated_at
+```
+
+### 36.2 Relationships and Invariants
+
+```text
+User / GuestSession
+       |
+       +--> Report --> Media
+       |      |
+       |      +--> ReportVote
+       |      +--> Verification
+       |      +--> Resolution --> Media
+       |      +--> Hotspot --> Authority --> AdministrativeBoundary
+       |
+       +--> XPEvent --> CivicDexEntry / QuestProgress / LeaderboardSnapshot
+       |
+       +--> ActionParticipation --> CivicAction
+```
+
+The first implementation should enforce these invariants:
+
+1. A report has exactly one `report_type` and one supported category.
+2. A report location is required and is mapped to a supported city and ward when
+   boundary data is available.
+3. A user or guest session cannot vote more than once on the same report.
+4. An XP source uses an idempotency key so retries cannot award XP twice.
+5. Upvotes affect attention and ranking but do not directly award reporter XP.
+6. Only verified reports and verified action participation can award impact XP.
+7. Civic Catch identity and evidence visibility must pass moderation policy before
+   public display.
+8. Media deletion, moderation, and retention events are auditable.
+9. Authority mappings retain their source and validity period.
+10. Derived hotspot and leaderboard values can be rebuilt from source records.
+
+---
+
+## 37. Implementation Plan
+
+Implementation should follow the Mumbai pilot and keep the first release narrow,
+observable, and reversible. The recommended architecture is a mobile client,
+API backend, PostgreSQL with PostGIS, object storage, Redis for derived rankings,
+and background workers for moderation, hotspot scoring, and notifications.
+
+### 37.1 Repository Structure
+
+```text
+civicquest/
+  apps/
+    mobile/                  # React Native / Expo client
+    api/                     # FastAPI or Node/TypeScript service
+    web-admin/               # moderation and authority operations later
+  packages/
+    shared/                  # types, validation, API contracts
+    civic-taxonomy/          # categories, XP rules, status enums
+    geo/                     # boundaries, distance, hotspot helpers
+  infrastructure/
+    database/
+    storage/
+    deployment/
+  docs/
+  tests/
+  openspec/
+```
+
+### 37.2 Service Boundaries
+
+1. **Identity service:** guest sessions, account claiming, profiles, and access
+   control.
+2. **Report service:** report creation, media references, statuses, categories,
+   and report detail.
+3. **Attention service:** upvotes, feed ordering, verification signals, and
+   hotspot inputs.
+4. **Geospatial service:** coordinate validation, ward lookup, nearby search,
+   and authority mapping.
+5. **Trust service:** moderation queues, duplicate detection, rate limits,
+   credibility, disputes, and appeals.
+6. **Impact service:** resolutions, Civic Actions, check-ins, before/after proof,
+   and organizer verification.
+7. **Progress service:** XP events, levels, badges, CivicDex, quests, and
+   leaderboard snapshots.
+
+These boundaries may begin as modules in one API deployment. They should be
+separated by domain contracts before being separated into network services.
+
+### 37.3 Delivery Sequence
+
+#### Phase 0 - Product and Safety Foundation
+
+- Confirm supported Mumbai wards and the first Places categories.
+- Define Civic Catch privacy, moderation, appeals, and evidence-retention rules.
+- Define report, verification, resolution, and XP state transitions.
+- Create seed data for categories, XP rules, supported authorities, and boundaries.
+- Add API contract tests and a decision log for unresolved product choices.
+
+#### Phase 1 - Guest Map and Capture
+
+- Build the mobile shell with Explore, Feed, Capture, Quests, and Profile tabs.
+- Add guest session creation and location permission handling.
+- Display seeded Mumbai Places pins and supported Civic Catch pins.
+- Implement camera capture, category suggestion placeholder, location attachment,
+  report type selection, and submission.
+- Return a report identifier and provisional XP result after successful submission.
+
+#### Phase 2 - Feeds, Votes, and Profiles
+
+- Add separate Places and Civic Catches feeds.
+- Add report detail, upvote-only interaction, and nearby filtering.
+- Add profile XP, level progress, report counts, CivicDex, and basic badges.
+- Add guest progress claim through Google, Apple, or phone authentication.
+- Enforce vote uniqueness, rate limits, duplicate detection, and XP idempotency.
+
+#### Phase 3 - Hotspots and Accountability
+
+- Load supported administrative boundaries and ownership mappings.
+- Implement nearby report clustering and a versioned hotspot score.
+- Show active report count, attention count, issue mix, status, ward, and authority.
+- Add report status timeline and authority/representative references.
+- Make hotspot scores and ownership mappings rebuildable and source-audited.
+
+#### Phase 4 - Civic Actions and Verified Impact
+
+- Add NGO organizer and Civic Action publishing workflow.
+- Implement event listing, join, geofenced check-in, and participation history.
+- Add before/after media upload and organizer verification.
+- Award higher XP only after participation and impact verification.
+- Add cleanup impact card data for later social sharing.
+
+#### Phase 5 - Trust, Operations, and Growth
+
+- Build moderation queues, abuse reporting, disputes, and appeals.
+- Add authority update and resolution-proof workflows.
+- Add notifications, daily quests, leaderboard snapshots, and shareable cards.
+- Measure activation, report quality, resolution rate, retention, and real-world
+  impact before expanding categories or cities.
+
+### 37.4 API Surface for the Pilot
+
+```text
+POST /v1/guest-sessions
+POST /v1/auth/claim-guest-progress
+
+GET  /v1/map/issues
+POST /v1/reports
+GET  /v1/reports/{report_id}
+POST /v1/reports/{report_id}/upvote
+POST /v1/reports/{report_id}/verify
+GET  /v1/feeds/places
+GET  /v1/feeds/civic-catches
+
+GET  /v1/hotspots
+GET  /v1/hotspots/{hotspot_id}
+GET  /v1/wards/{ward_id}
+GET  /v1/authorities/{authority_id}
+
+GET  /v1/actions
+POST /v1/actions/{action_id}/join
+POST /v1/actions/{action_id}/check-in
+POST /v1/actions/{action_id}/impact
+
+GET  /v1/users/{user_id}/profile
+GET  /v1/users/{user_id}/xp-events
+GET  /v1/leaderboards
+GET  /v1/civicdex
+GET  /v1/quests
+```
+
+### 37.5 Operational Requirements
+
+- Use PostgreSQL transactions for report creation, vote uniqueness, and XP event
+  creation.
+- Use PostGIS indexes for nearby reports, boundary lookup, and hotspot queries.
+- Store media outside the database with signed URLs and malware/content checks.
+- Process classification, duplicate checks, notifications, and score recomputation
+  asynchronously through a durable job queue.
+- Keep an append-only audit trail for moderation, authority updates, XP reversals,
+  and resolution verification.
+- Add structured logs, metrics, tracing, error reporting, and a data-retention
+  job before public pilot access.
+- Protect sensitive evidence with least-privilege access, encryption, and explicit
+  deletion workflows.
+
+### 37.6 Definition of Pilot Readiness
+
+The Mumbai pilot is ready for limited testing when a guest can explore the map,
+submit a supported report, see it in the correct feed, receive idempotent XP,
+and understand its status and ownership. A claimed user must be able to see the
+same progress later, upvote without duplicate votes, and join a Civic Action.
+
+Before public launch, the team must also demonstrate that abusive or disputed
+individual reports can be hidden, appealed, and removed; that authority mappings
+have a named data source; and that XP, hotspot, and leaderboard values can be
+recomputed from auditable source events.
