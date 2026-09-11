@@ -2,7 +2,7 @@
 
 > Level up your city.
 
-CivicQuest is an open-source, mobile-first civic participation platform for Mumbai, India. It turns civic discovery, reporting, verification, and community action into a measurable experience with Civic XP, profiles, quests, and impact sharing.
+CivicQuest is an open-source, mobile-first civic participation platform for India. It turns civic discovery, reporting, verification, and community action into a measurable experience with Civic XP, profiles, quests, and impact sharing.
 
 The project is currently in the product vision and design-validation stage. This repository is the public home for the product direction, design references, decisions, and future implementation work.
 
