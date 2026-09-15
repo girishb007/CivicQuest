@@ -1,0 +1,13 @@
+{
+  "name": "civicquest", "private": true, "version": "0.1.0",
+  "packageManager": "pnpm@10.17.1",
+  "scripts": {
+    "dev": "pnpm --filter @civicquest/web dev",
+    "build": "pnpm --filter @civicquest/web build",
+    "typecheck": "pnpm --filter @civicquest/web typecheck",
+    "test": "pnpm --filter @civicquest/web test",
+    "test:e2e": "playwright test",
+    "contracts": "openapi-typescript packages/contracts/openapi.json -o packages/contracts/api.d.ts"
+  },
+  "devDependencies": {"@playwright/test": "^1.55.0", "openapi-typescript": "^7.9.1", "@axe-core/playwright": "^4.10.2"}
+}

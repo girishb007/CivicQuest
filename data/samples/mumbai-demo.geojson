@@ -1,0 +1,145 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "code": "demo-mumbai",
+        "name": "Greater Mumbai \u2014 illustrative extent",
+        "area_type": "city"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              72.75,
+              18.85
+            ],
+            [
+              73.02,
+              18.85
+            ],
+            [
+              73.02,
+              19.35
+            ],
+            [
+              72.75,
+              19.35
+            ],
+            [
+              72.75,
+              18.85
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "code": "demo-central",
+        "name": "Demo central neighborhood",
+        "area_type": "ward"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              72.79,
+              18.97
+            ],
+            [
+              72.94,
+              18.97
+            ],
+            [
+              72.94,
+              19.09
+            ],
+            [
+              72.79,
+              19.09
+            ],
+            [
+              72.79,
+              18.97
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "code": "demo-north",
+        "name": "Demo northern neighborhood",
+        "area_type": "ward"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              72.79,
+              19.09
+            ],
+            [
+              72.98,
+              19.09
+            ],
+            [
+              72.98,
+              19.3
+            ],
+            [
+              72.79,
+              19.3
+            ],
+            [
+              72.79,
+              19.09
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "code": "demo-south",
+        "name": "Demo southern neighborhood",
+        "area_type": "ward"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              72.79,
+              18.85
+            ],
+            [
+              72.94,
+              18.85
+            ],
+            [
+              72.94,
+              18.97
+            ],
+            [
+              72.79,
+              18.97
+            ],
+            [
+              72.79,
+              18.85
+            ]
+          ]
+        ]
+      }
+    }
+  ]
+}

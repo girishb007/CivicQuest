@@ -1,0 +1,15 @@
+'use client';
+
+import {useQuery} from '@tanstack/react-query';
+import {Camera,MapPin,ShieldCheck,Sparkles,Trophy} from 'lucide-react';
+import Link from 'next/link';
+import {api,pretty} from '@/lib/api';
+import {CharacterPortrait} from './character-portrait';
+
+const badgeNames=['first_verified_report','seven_day_streak','zone_scout','high_impact_helper','first_verified_action','neighbourhood_hero','early_bird','level_10','first_assist','ward_champion','high_severity_fix','century_club'];
+
+export function PublicProfileScreen({handle,me}:{handle:string;me:any}){
+ const profile=useQuery({queryKey:['public-profile',handle],queryFn:()=>api(`/profiles/${handle}`)});const catches=useQuery({queryKey:['profile-catches',handle],queryFn:()=>api(`/profiles/${handle}/catches`)});
+ if(profile.isPending)return <div className="state"><Sparkles className="spin"/><p>Opening Civic Card…</p></div>;if(profile.isError)return <div className="error">This public CivicQuest profile is unavailable.</div>;const person=profile.data;
+ return <><section className="civic-card"><div className="profile-avatar"><CharacterPortrait id={person.portrait_id} name={person.display_name}/></div><div><span className="kicker">CIVIC CARD · LEVEL {person.level}</span><h1>{person.display_name}</h1><p>@{person.handle}</p></div><strong>{person.xp}<small>Verified XP</small></strong></section><div className="profile-public-stats"><span><strong>{person.verified_reports}</strong>verified reports</span><span><strong>{person.resolved_reports}</strong>resolved</span><span><strong>{person.streak}</strong>day streak</span></div><section className="report-section"><h2><Trophy/>Badge collection</h2><div className="twelve-badges">{badgeNames.map(code=><div className={person.badges.includes(code)?'earned':''} key={code}><Trophy/><span>{pretty(code)}</span></div>)}</div></section><section className="catch-wall-head"><div><span className="kicker">PUBLIC CIVIC CATCH JOURNAL</span><h2>{catches.data?.items?.length||0} observable violations</h2></div>{me?.handle===handle&&<Link className="button dark" href="/profile/catches/new"><Camera size={15}/>Live Catch</Link>}</section><p className="field-note"><ShieldCheck size={14}/>Catch posts show exact capture time and location, earn no XP, and stay outside Explore, Feed, hotspots, quests and leaderboards.</p><div className="catch-wall">{catches.data?.items?.map((item:any)=><article key={item.id}>{item.media.kind==='video'?<video src={item.media.url} poster={item.media.poster_url} controls playsInline/>:<img src={item.media.url} alt="Civic Catch observation"/>}<div><span className="kicker">{pretty(item.category)} · {item.public_code}</span><p>{item.description}</p><small><MapPin size={12}/>{item.location.address} · {item.location.lat.toFixed(5)}, {item.location.lng.toFixed(5)}</small><small>{new Date(item.captured_at).toLocaleString('en-IN')}</small></div></article>)}</div>{!catches.isPending&&!catches.data?.items?.length&&<div className="state"><Camera/><p>No public Civic Catch posts.</p></div>}</>
+}

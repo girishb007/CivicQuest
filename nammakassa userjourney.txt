@@ -1,0 +1,206 @@
+NammaKasa — Full Functional Reverse Engineering
+
+Live app version: v1.4.1. Captured via live browser automation (TinyFish) on 12 September 2026. Every fact below is tagged:
+
+Tag	Meaning
+CONFIRMED	Read directly off the live, rendered app by driving a real browser
+PENDING	Automation run in progress at time of writing; not yet returned
+DELIBERATELY NOT TESTED	Could have been clicked, but I chose not to — see the note in §6
+
+I did not click "Verify Cleanup," "Flag as Incorrect," or "I've seen this," and did not submit the community-registration or newsletter forms. This is a live tool real citizens depend on — clicking those would write fake actions into a real ward's public record. Everything below came from looking, not from mutating anything. If you want those specific click-through behaviors confirmed, tell me and I'll do it deliberately with your sign-off (ideally on a test/staging report if the team ever gives you one, not a real citizen's dump report).
+
+1. What the site actually is, right now
+Tagline (confirmed on the live homepage, replacing the stale meta tag): "Bengaluru has a garbage problem." / "Report it. Photograph it. Track who is responsible." / "Every dump is mapped to the responsible ward, MLA, and MP. When enough citizens report, it becomes impossible to ignore."
+Coverage: 369 wards · 28 MLAs · 5 MPs · All of Bengaluru.
+Current numbers: 7,857 total reports, 7,578 active (unresolved), 279 resolved → 3.6% resolution rate.
+A newsletter exists: "Join 635 Bengalureans on the Monday digest" — a dismissible pink banner. This is the public-facing half of the "automated weekly email" the founder described; the private half presumably goes to officials.
+Backend confirmed: report photos are hosted at tcldazhypyuutdpoksfx.supabase.co/storage/v1/object/public/garbage-photos/reports/... — Supabase, exactly as reported in press.
+2. App shell — CONFIRMED
+Element	Detail
+Header	"Namma" wordmark + version tag v1.4.1, "ಕನ್ನಡ" language toggle, "About", "Menu"
+Map engine	MapLibre GL JS + CARTO basemap tiles + OpenStreetMap data (attribution visible: "MapLibre | © CARTO, © OpenStreetMap contributors")
+PWA	Installable, iOS-capable, red theme historically 
+#DD3333 (current build's theme-color meta now reads 
+#ffffff — worth checking if this is a bug or an intentional light-mode default)
+3. Filter bar — CONFIRMED, exact values
+Control	Full option list
+All Severity dropdown	All Severity, Minor, Moderate, Severe, Critical
+All Status dropdown	All Status, Unresolved, Resolved
+Map / List toggle	Two tabs, Map active by default
+
+List view — confirmed columns, and the actual first 5 rows off the live site:
+
+Total	Ward	Location	Unresolved	Representative
+141	Sunkenahalli	Central #42	140	Uday B. Garudachar
+131	Panathur	East #48	111	Manjula S.
+115	Kasavanahalli	South #31	112	Manjula S.
+105	Priyadarshini Ward	East #42	78	Manjula S.
+102	Mahadevapura	East #22	100	B. A. Basavaraja
+
+This is an important, unexpected finding. Every ward-detail screen I'd seen up to now showed "Corporator — Vacant since 2020." But the list view here shows a named representative per ward, and the same name ("Manjula S.") appears across wards in different corporation zones. That's inconsistent with a corporator (who serves one ward only) — it strongly suggests these are the assembly (MLA) or corporation-zone-level names, not ward corporators, and the "Vacant since 2020 / elections expected mid-2026" copy I saw earlier is now likely stale: today's date is September 2026, past that expected mid-2026 election window. Bengaluru's corporator elections may have actually happened since that copy was written, and the app may not have updated every cached report card to reflect it. This is worth verifying directly — pull up any ward page today and check whether it still says "Vacant" or now shows a real corporator name. If elections did happen, your clone should model seat_status as something that flips over time, not a permanent constant, which the schema in §9 already supports.
+
+Also note: this list reported 244 wards total, while the homepage tagline and the GBA delimitation dataset both say 369. I'm treating 369 as authoritative (it's independently confirmed by an open dataset), and flagging 244 as most likely an artifact of the automated pass not scrolling/loading the full paginated list rather than a real second ward count — but if you see 244 again from a manual check, tell me and I'll dig into why the site itself disagrees with its own tagline.
+
+4. The map, clusters, and hotspots
+4.1 Visual layer — CONFIRMED from screenshots you provided
+Ward choropleth: every ward polygon filled red, opacity scales with report count in that ward (dense wards like Malleshwaram/Mahalakshmi Layout are near-solid red; empty wards are nearly white).
+Pin colors map to severity: yellow (Minor) → orange (Moderate) → red (Severe) → dark maroon (Critical), plus green for Resolved.
+Numbered dark circles (e.g. 26, 11, 9, 7, 5, 4) — these are clusters: multiple reports collapsed into one marker at the current zoom level, count shown on the marker.
+Larger dark maroon circles with a soft halo and no number — these are hotspots: repeated dumping concentrated in one small area, visually emphasized so chronic sites read louder than isolated litter.
+Ward hover card, confirmed field-by-field from your screenshot:
+  Kethamaranahalli
+  West #43 · Rajarajeshwarinagar
+  Mahalakshmi Layout
+  10 reports
+
+Line 1 = ward name. Line 2 = corporation + ward number + zone/division. Line 3 = assembly constituency. Line 4 = report count in that ward.
+
+4.2 Click behavior on clusters, hotspots, and ward polygons — INCONCLUSIVE (map failed to render in this automation pass)
+
+The automated browser loaded the page (filters, stats, and every other DOM element worked) but the MapLibre canvas itself rendered as a blank white area — no tiles, pins, clusters, or ward polygons appeared. This reads like a WebGL/canvas limitation of that specific headless run, not necessarily a real bug in the live app your screenshots clearly show working. So I can't confirm cluster/hotspot/ward-polygon click behavior from this pass — I won't report a guess as fact. If this matters before you build, the fastest fix is you clicking those three things yourself for 30 seconds on your own phone/laptop; I'll take screenshots and folded confirmations from that immediately.
+
+One thing this run did confirm cleanly: there is no legend anywhere on the page. No key explaining pin colors, marker sizes, or what a hotspot vs. a cluster means — a citizen has to infer it from the UI. Worth fixing in your clone with a small collapsible legend.
+
+4.3 Filing a new report — CONFIRMED: QR-only on desktop, no desktop form exists
+
+Clicking "Scan QR to Report" opens a modal containing a QR code generated via api.qrserver.com/v1/create-qr-code/ and a close button. That's it — there is no desktop complaint form at all, not even hidden behind another click. Filing only happens on a phone after scanning the QR (presumably landing on a mobile capture view). This confirms my earlier inference and forecloses the question — build the same split: map/browse/leaderboard fully on desktop, capture flow mobile-only.
+
+5. Volunteer Communities — CONFIRMED, this is the full answer
+
+What it is: a self-registered directory of cleanup groups (RWAs, ploggers, apartment associations) operating in Bengaluru. Example entries seen in the directory: Team socialspotlight, NammaKasa Community, Ploggers Army.
+
+The registration form, field by field (confirmed by opening it):
+
+Field	Type	Required
+Community Name	Text	Yes
+What You Do	Text	Yes
+About Your Community	Text area	No
+Where You Work	Choice: "We work across all of Bengaluru" or "Search a ward by name or number"	Yes
+Links	WhatsApp + Instagram text fields, plus buttons for Facebook / X / Website / LinkedIn / YouTube / Telegram	Yes (at least one, inferred)
+Logo	File upload	Yes
+Verification Details	Your name + Phone — explicitly labeled "Not shown publicly"	Yes
+
+Buttons: + Register your community (entry point) → form → Cancel / Submit.
+
+How you get this dataset: you don't pull it from anywhere — you build the same self-registration flow. There is no government or open dataset of RWAs/volunteer groups (I checked in the earlier pass — nothing exists nationally or for Bengaluru). NammaKasa's own approach is the answer: let groups register themselves, collect a private name+phone for verification, and moderate manually before listing publicly. That "Not shown publicly" field is their anti-spam gate — a human presumably reviews new submissions using that contact before they go live.
+
+6. Report detail sheet — CONFIRMED, live example
+
+Captured from report/1a095658-f50b-4399-bd6f-189f58bae81a:
+
+Field	Value
+Severity chip	MODERATE (orange)
+Status chip	Unresolved (red)
+Ward	Subramanyanagara — West #55
+Address (free-typed by reporter)	"Sandal soap factory metro"
+Also seen	2
+Days open	96
+Waste Type	Mixed Waste
+Footer	"Reported 96d ago · 2 citizen(s) reported · 96d unresolved" · "All reports are anonymous"
+Photo	Ground-level shot of cracked concrete with debris — hosted on Supabase storage
+
+Get directions — confirmed: opens Google Maps in a new tab, pinned to the report's coordinates.
+
+Share icon — confirmed present, top-right of the sheet next to close (X). Clicking it opens a small modal; exact share options weren't fully readable in the automated pass (likely a native navigator.share() fallback to a "copy link" option — standard pattern, not yet 100% confirmed).
+
+Buttons — appearance confirmed, behavior deliberately not tested:
+
+Button	Appearance
+Verify Cleanup	Green, white text, checkmark-in-circle icon
+Flag as Incorrect	Red, white text, flag icon
+I've seen this	Orange text button, overlaid bottom-right on the photo
+
+I did not click these. My inference for the build (unconfirmed): "Verify Cleanup" likely either flips status immediately or requires an after-photo before flipping — this is genuinely the single most important unanswered question for your resolution-loop design, and the only way to answer it honestly is to test it on a report you or your team controls, not a stranger's real complaint. Same caution applies to "I've seen this" (likely increments Also Seen, one vote per device via localStorage) and "Flag as Incorrect" (likely increments a flag counter, hides at a threshold).
+
+7. Accountability hierarchy — CONFIRMED, and one important correction to my earlier guess
+7.1 The chain, as rendered for this ward
+                    Your Ward
+                West #55 · Subramanyanagara
+                            |
+        ┌───────────────────┴───────────────────┐
+     BSWML                                  Corporator
+  "Reports to GBA"                    ⚠ Vacant since 2020
+   (blue seal icon)
+        |
+   Commissioner  — GBA / Corporation head · Top of chain
+        |
+   Additional Commissioner — West-level oversight
+        |
+   Asst. Executive Engineer (AEE) — Engineering oversight
+        |
+   Junior Health Inspector (JHI) — Frontline ward officer
+───────────────────────────────────────────────────
+ELECTED REPRESENTATIVES FOR THIS WARD
+ [photo] Dr. C. N. Ashwathnarayan        [photo] Shobha Karandlaje
+         BJP · MLA, Malleshwaram                 BJP · MP
+"Tap any card for contact options · Corporator elections expected mid-2026"
+
+This matches the structure from your earlier screenshot exactly (ward → utility + vacant corporator → officer chain → elected reps), now confirmed with a second, different ward/report.
+
+7.2 What actually happens when you tap the MLA or MP face — CORRECTING my earlier guess
+
+I previously assumed this opens a contact panel (phone/email/X handle). That was wrong — I tested it, and here's what's actually there:
+
+Tapping Dr. C. N. Ashwathnarayan's card opens an accountability analytics panel, not a contact card:
+
+Field shown	Value
+Constituency	Malleshwaram
+Party	BJP
+Active (unresolved) reports across the constituency	92
+Total reports (all-time)	147
+Average days unresolved	92
+Wards in this constituency	10
+Worst wards, ranked	Malleshwaram, Subramanyanagara, Sadashiva Nagara, Rajamahal, Mathikere (each with its own count)
+
+No phone number, email, or X/Twitter handle appeared in this panel. Tapping the MP's card opens the same shape of panel (role, party, constituency rollup) — same absence of direct contact info.
+
+Why this matters for your clone: this is a much better feature than a contact card. It's not "here's how to email your MLA" — it's "here's the aggregate evidence against your MLA's entire constituency, ranked by which of their wards is worst." That's the actual accountability mechanism, and it's more damning and harder to dismiss than a single dump photo. Build this panel, not a rolodex entry. The footer text "Tap any card for contact options" may be leftover/aspirational copy that doesn't match current behavior, or contact options may appear on a different card in the chain (BSWML or the officer nodes) that this pass didn't click — worth a follow-up test specifically on those.
+
+8. Leaderboard / stats panel — CONFIRMED
+
+Opened via the bar-chart icon in the bottom bar (labeled with the live Active count).
+
+It's a Ward Leaderboard, ranked by unresolved report count:
+
+Rank	Ward	Location	Unresolved	Resolved %
+1	Sunkenahalli	Central #42	141	1%
+2	Panathur	East #48	131	15%
+3	Kasavanahalli	South #31	115	3%
+
+Plus city-wide summary stats: 3.6% resolution rate, 279 resolved, 7,578 unresolved. No separate MLA/MP-only leaderboard tab was found in this pass — the MLA-level rollup instead lives inside the MLA's own accountability panel (§7.2), which is arguably a cleaner design than a flat politician leaderboard.
+
+9. Data model implications (updates from this pass)
+representatives
+  ... existing fields ...
+  -- confirmed: NO public phone/email/handle rendered in the UI panel.
+  -- Store contact info privately for your own escalation emails (§ founder's
+  --  weekly digest), but don't promise a public "contact your MLA" button
+  --  unless you source that separately (PRS/ECI affidavits do have some).
+
+constituency_stats            -- powers the MLA/MP tap panel — build this table
+  constituency_id, role(MLA|MP)
+  active_reports, total_reports, avg_days_unresolved, ward_count
+  worst_wards jsonb            -- [{ward_name, count}, ...] top N by count
+
+ward_leaderboard               -- powers the bar-chart panel
+  ward_id, rank, unresolved_count, resolved_pct
+
+communities
+  id, name, what_you_do, about text null
+  coverage enum('citywide','wards'), ward_ids[] null
+  links jsonb                  -- {whatsapp, instagram, facebook, x, website, linkedin, youtube, telegram}
+  logo_url
+  contact_name, contact_phone  -- private, verification-only, never rendered publicly
+  status enum('pending','verified','rejected')
+10. Still open
+Cluster / hotspot / ward-polygon click behavior — the map didn't render in the automated pass (§4.2). Needs a manual click-through on a real browser (yours, or mine via a retried automation run) to confirm.
+Whether corporator seats are still actually vacant — the list view's named representatives (§3) suggest this may have changed since the "Vacant since 2020" copy was written. Worth a direct check.
+Verify Cleanup / Flag as Incorrect / I've seen this — actual click behavior. Deliberately not tested — this writes real data into a live citizen's report. Test it only on a report you or your team control, and I'll do it precisely and report back exactly what changes.
+BSWML and officer-node taps — whether contact info lives there instead of on the MLA/MP cards, which turned out to show analytics, not contact info (§7.2).
+Share icon's exact options and whether theme-color is genuinely white now or a metadata bug (§2).
+
+Tell me which of these matters most and I'll go confirm it directly rather than leave it as a guess.
+
+Sources
+Live app: https://www.nammakasa.in/ — homepage, /report/1a095658-f50b-4399-bd6f-189f58bae81a, driven via TinyFish browser automation, 12 Sep 2026
+Prior sitemap/press research: PRS Legislative Research (prsindia.org), Digital Sansad (sansad.in), OpenCity GBA Wards Delimitation 2025, Datameet maps

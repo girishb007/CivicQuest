@@ -1,0 +1,60 @@
+name: civicquest
+x-app: &app
+  build: {context: ., dockerfile: infrastructure/docker/api.Dockerfile}
+  environment: &env
+    CQ_ENV: local
+    CQ_DEMO_MODE: 'true'
+    CQ_DATABASE_URL: postgresql+psycopg://civicquest:civicquest@db:5432/civicquest
+    CQ_REDIS_URL: redis://redis:6379/0
+    CQ_ORIGIN: http://localhost:3000
+    CQ_STORAGE: filesystem
+    CQ_MEDIA_ROOT: /app/.local/media
+    CQ_SQS_ENDPOINT: http://queue:9324
+    CQ_QUEUE_URL: http://queue:9324/000000000000/civicquest
+    CQ_QUEUE_MODE: sqs
+    CQ_GOOGLE_CLIENT_ID: ${CQ_GOOGLE_CLIENT_ID:-}
+    CQ_GOOGLE_CLIENT_SECRET: ${CQ_GOOGLE_CLIENT_SECRET:-}
+    CQ_MAPTILER_KEY: ${CQ_MAPTILER_KEY:-}
+    CQ_BEDROCK_MODEL_ID: ${CQ_BEDROCK_MODEL_ID:-}
+    CQ_VAPID_PUBLIC_KEY: ${CQ_VAPID_PUBLIC_KEY:-}
+    CQ_VAPID_PRIVATE_KEY: ${CQ_VAPID_PRIVATE_KEY:-}
+  volumes: [media:/app/.local/media]
+services:
+  db:
+    build: {context: ., dockerfile: infrastructure/docker/postgis.Dockerfile}
+    environment: {POSTGRES_USER: civicquest, POSTGRES_PASSWORD: civicquest, POSTGRES_DB: civicquest}
+    ports: ['127.0.0.1:55432:5432']
+    volumes: [database:/var/lib/postgresql/data]
+    healthcheck: {test: [CMD-SHELL, pg_isready -U civicquest], interval: 5s, timeout: 5s, retries: 15}
+  redis:
+    image: redis:7.4-alpine
+    command: [redis-server, --appendonly, 'yes']
+    ports: ['127.0.0.1:56379:6379']
+    volumes: [redis:/data]
+  queue:
+    image: softwaremill/elasticmq-native:1.6.15
+    volumes: ['./infrastructure/docker/elasticmq.conf:/opt/elasticmq.conf:ro', 'queue:/data']
+    ports: ['127.0.0.1:9324:9324']
+  migrate:
+    <<: *app
+    command: [alembic, upgrade, head]
+    depends_on: {db: {condition: service_healthy}}
+  seed:
+    <<: *app
+    command: [civicquest, seed]
+    depends_on: {migrate: {condition: service_completed_successfully}}
+  api:
+    <<: *app
+    ports: ['127.0.0.1:8000:8000']
+    depends_on: {seed: {condition: service_completed_successfully}}
+    healthcheck: {test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready')"], interval: 10s, timeout: 5s, retries: 10}
+  worker:
+    <<: *app
+    command: [civicquest, worker]
+    depends_on: {seed: {condition: service_completed_successfully}, queue: {condition: service_started}}
+  web:
+    build: {context: ., dockerfile: infrastructure/docker/web.Dockerfile}
+    environment: {API_INTERNAL_URL: 'http://api:8000'}
+    ports: ['127.0.0.1:3000:3000']
+    depends_on: {api: {condition: service_healthy}}
+volumes: {database: {}, media: {}, redis: {}, queue: {}}

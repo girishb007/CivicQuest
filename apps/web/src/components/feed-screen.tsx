@@ -1,0 +1,11 @@
+'use client';
+import {useQuery} from '@tanstack/react-query';
+import {ArrowRight,Eye,MapPin,Newspaper} from 'lucide-react';
+import Link from 'next/link';
+import {useState} from 'react';
+import {api,pretty} from '@/lib/api';
+
+export function FeedScreen(){
+ const [status,setStatus]=useState('all');const query=useQuery({queryKey:['mobile-feed'],queryFn:()=>api('/feed/places')});const items=(query.data?.items||[]).filter((item:any)=>status==='all'||(status==='resolved'?item.status==='resolved':item.status!=='resolved'));
+ return <><header className="page-title"><span className="kicker">LOCAL REPORTS</span><h1>Your community pulse</h1><p>Follow factual Place reports and their verified progress.</p></header><div className="filter-row"><button className={status==='all'?'selected':''} onClick={()=>setStatus('all')}>All</button><button className={status==='active'?'selected':''} onClick={()=>setStatus('active')}>Active</button><button className={status==='resolved'?'selected':''} onClick={()=>setStatus('resolved')}>Resolved</button></div>{query.isPending?<div className="state"><Newspaper/><p>Loading reports…</p></div>:query.isError?<div className="error">The feed is temporarily unavailable.</div>:<div className="mobile-feed">{items.map((item:any)=><article key={item.id}><Link className="feed-photo" href={`/i/${item.public_code}`}>{item.image_url?<img src={item.image_url} alt={item.title}/>:<div className="photo-placeholder"><MapPin/></div>}<span className={`severity-pill ${item.severity}`}>{item.severity}</span></Link><div><span className="kicker">{item.public_code}</span><Link href={`/i/${item.public_code}`}><h2>{item.title}</h2></Link><p><MapPin size={13}/>{item.address}</p><div className="feed-card-foot"><span className={`tag ${item.status==='resolved'?'green':'orange'}`}>{pretty(item.status)}</span><span><Eye size={14}/>{item.seen_count||0} Seen</span><Link href={`/i/${item.public_code}`} aria-label={`Open ${item.title}`}><ArrowRight size={17}/></Link></div></div></article>)}</div>}{!query.isPending&&!items.length&&<div className="state"><Newspaper/><p>No matching Place reports yet.</p></div>}<p className="feed-privacy-note">Civic Catch posts are kept in opted-in public profile journals and never appear in this feed.</p></>
+}

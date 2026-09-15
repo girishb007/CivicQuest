@@ -1,0 +1,343 @@
+Requirements gathering · v0.1 · draft
+
+Rebuilding NammaKasa
+A functional teardown of nammakasa.in — the crowdsourced garbage map that ties every dump in Bengaluru to the MLA and MP responsible for the ward it sits in — written as a build spec.
+
+Subject
+www.nammakasa.in
+Prepared
+10 September 2026
+Method
+Metadata + sitemap + press
+Live-UI walkthrough
+Pending — see §0
+0.0
+What this is built on, and what is still missing
+Read this before treating anything below as verified
+NammaKasa is a client-rendered React/Vite single-page app. Its served HTML is a shell — the entire interface is painted by JavaScript after load. Every fetch of the site from this session returned only that shell: title, meta description, Open Graph tags, theme colour. Direct browser access to the domain is blocked by this sandbox's egress policy, so I could not render the app and read the actual screens.
+
+Everything in §1–§2 that concerns routes and coverage comes from the live sitemap.xml and is hard fact. Everything concerning features, flows and integrations comes from the founder's own descriptions in press interviews and is reliable but second-hand. Anything concerning screen layout, component structure, copy and visual design is inferred, and is marked as such.
+
+Evidence	Gives us	Confidence
+sitemap.xml	Exact route patterns, exact page counts, priorities, changefreq, last-modified	verified
+<head> metadata	Positioning copy, brand colour #DD3333, OG image spec, PWA hints	verified
+Founder interviews (5 outlets)	Feature set, integrations, tech stack, launch timeline, traction	strong
+Civic Tech Field Guide listing	Category, status, social handles	strong
+Rendered UI	Screen layout, components, microcopy, empty states, form fields, map styling	not captured
+How to close the gap in one sitting
+Any one of these gets me the real screens, after which §3 stops being inference:
+
+Link your computer to this session from the Claude desktop app — then I can drive your Chrome through the site, click every route, and capture each screen.
+Screenshots — home, the report sheet mid-flow, the map, one ward page, one MLA page, and /communities. Six images pins down the whole UI.
+A saved copy — in Chrome, DevTools → Network, reload, "Copy all as HAR", and attach it. That hands me the rendered DOM, the JS bundle, and every backend call the app makes, which resolves the API section outright.
+1.0
+The product, and the thesis behind it
+NammaKasa ("our garbage", in Kannada) is a public, anonymous, login-free map of garbage dumps in Bengaluru. A resident photographs a pile, the browser geotags it, and within about thirty seconds the pile is a pin on a public map. The pin is not merely a complaint — it is resolved against the city's ward boundaries, so it attaches to a named ward, and through that ward to a named MLA and a named MP.
+
+The product's real thesis sits in that last step. Conventional municipal grievance systems send a complaint into a queue where it is invisible and, in practice, unaccountable. NammaKasa inverts it: complaints are never private, they aggregate by constituency, and constituencies are ranked against each other on a public leaderboard. The founder's framing is that cities change "when problems can no longer be ignored" — the product is a pressure instrument, not a ticketing system.
+
+It was built in about two days by Jyothish VM, a Bengaluru product designer, with AI-assisted coding, and launched on 4 April 2026. Total capital outlay was the domain: roughly ₹3,000. It is explicitly non-commercial; the founder has said he turned down acquisition interest.
+
+Positioning copy, verbatim from the live site
+Title: NammaKasa: Crowdsourced Garbage Map, Bengaluru
+Description: Report and track garbage dumps across Bangalore. See which MLA and MP are responsible for your ward.
+Social card: Report garbage, track accountability
+Coverage claim: 243 wards. Every MLA. Every MP.
+Auto-detection promise: the app detects your ward, MLA and MP from your location.
+
+Reported traction (press figures, first weeks after launch)
+Metric	Figure	Window
+Reports filed	200+	First 72 hours
+Reports filed	230+	First 4 days
+Reports filed	507	Cumulative, mid-April
+Visitors	~45,000	First 4 days
+Issues actually resolved	2	First 4 days
+That resolution ratio is the honest headline for a clone: the product is very good at generating visibility and, so far, weak at closing the loop. If your clone can add a credible resolution workflow, that is the differentiator worth building.
+
+2.0
+Route inventory
+Taken from https://www.nammakasa.in/sitemap.xml, last modified 2026-07-16. Total: 387 indexed URLs.
+
+Route	Count	Priority	Changefreq	Purpose
+/	1	1.0	daily	Map, report entry point, live activity
+/communities	1	0.7	weekly	Community / RWA-oriented surface
+/ward/:slug	364	0.6	weekly	Per-ward report list and representatives
+/mla/:constituency	21	0.5	weekly	Per-constituency accountability page
+Three things this inventory tells you
+Ward slugs are kebab-case place names, not numbers — /ward/agara, /ward/bellanduru, /ward/adi-chunchanagiri-ward, /ward/abdul-kalam-nagar. Your slug generator must handle transliteration variants, the trailing word "ward" that some official names carry, and near-duplicate names (ashoka-nagara vs ashokanagar, chowdeshwari-nagar vs chowdeshwari-ward).
+MLA routes are not slugged — they use the raw constituency name, URL-encoded: /mla/BTM%20Layout, /mla/C%20V%20Raman%20Nagar, /mla/Bangalore%20South. That is a shortcut worth fixing in a clone; slug them and 301 the encoded form.
+The marketing number and the actual number disagree. The site says 243 wards; the sitemap ships 364 ward pages. Bengaluru's ward count was restructured under the Greater Bengaluru reorganisation, so the tagline is likely stale copy against a newer boundary dataset. Decide early which dataset your clone is authoritative on, because every ward page, every slug and every point-in-polygon lookup is downstream of that choice.
+There is no /mp/ route and no /leaderboard route in the sitemap, even though press coverage describes both MP attribution and a public leaderboard. Both are therefore rendered inside existing pages — MP details on ward/MLA pages, the leaderboard most likely on the homepage or /communities. Confirm this when you walk the live UI.
+No /report route. Reporting is a modal or bottom sheet over the map, not a page. That matters — it is what makes the 30-second claim possible.
+3.0
+Page-by-page specification
+Routes and purpose are verified. Component breakdowns are the inferred build target — treat them as the spec to confirm, not as a transcription of the live UI.
+
+/
+Home — map and report
+Does four jobs at once: locate the visitor, show the city's state, capture a report, and name who is responsible.
+
+Full-bleed OpenStreetMap canvas with clustered report pins
+Geolocation prompt on load; resolves coordinates to ward, MLA, MP
+Persistent primary action — "Report garbage" — opening the capture sheet
+Ward context card: your ward name, your MLA, your MP, count of open reports
+City-level counters (total reports, wards affected, resolved)
+Recent-reports strip with thumbnail, ward name, relative time
+Accountability leaderboard, or an entry point to it
+Search or manual ward picker for visitors who deny location access
+/ (report sheet, overlay)
+Report capture
+The core interaction. No route, no account, no phone number, no email — the entire funnel is the sheet.
+
+Camera / file input, single photo (multi-photo unconfirmed)
+Auto-captured GPS coordinates with a draggable pin to correct them
+Reverse-resolved ward shown back to the user before submit
+Optional short description; issue type beyond garbage is a likely later addition
+Submit, then a confirmation showing the new pin and the responsible representatives
+Share action — the social loop is a primary growth channel, not an afterthought
+/ward/:slug
+Ward page · 364 of these
+The SEO and civic-organising workhorse. Each is a standing public record for one ward.
+
+Ward name, number, and boundary drawn on a map
+Reports in this ward — list plus map, newest first, with status
+Representatives block: MLA (with constituency), MP (with parliamentary constituency), likely with contact or X handle
+Ward statistics: total reports, open, resolved, trend
+Rank of this ward against the rest of the city
+Report action scoped to this ward
+Per-ward share card for WhatsApp groups and RWAs
+/mla/:constituency
+MLA page · 21 of these
+The accountability page. Aggregates every ward inside one assembly constituency under one named politician.
+
+MLA name, party, constituency, photo, official X handle
+Aggregate report count and resolution rate across constituent wards
+Leaderboard position among constituencies
+Ward breakdown table, linking down to each ward page
+Map of the constituency with report density
+Share and tag actions aimed at public pressure
+/communities
+Communities
+The least-documented page and the one to inspect first — priority 0.7 puts it second only to home, so it carries real weight in the product.
+
+Most likely: apartment complexes, RWAs and neighbourhood groups adopting an area
+Possibly a directory of active civic groups with their report volumes
+Possibly the leaderboard surface itself, framed as community standings
+Treat scope as unknown until the live page is read
+shared shell
+Global chrome
+Applies across every route.
+
+Brand mark and wordmark; theme colour #DD3333
+Mobile-first, installable-web-app meta (apple-mobile-web-app-capable, full-screen)
+Open Graph and Twitter card, 1200×630 image — per-ward and per-MLA OG images are an obvious clone upgrade
+Footer: about, socials (X and Instagram, both @nammakasa), non-commercial statement
+4.0
+Feature inventory with build priority
+Feature	Behaviour	Source	Priority
+Anonymous reporting	No account, no phone, no email. Identity never collected.	Founder	must
+Photo capture	Camera or upload; image is the evidence and the whole payload.	Founder	must
+Automatic geotagging	Browser geolocation at capture, with manual correction.	Founder	must
+Ward resolution	Point-in-polygon against ward boundaries; drives everything downstream.	Metadata	must
+Representative attribution	Ward → MLA and MP, shown on the report and on every ward page.	Metadata	must
+Live public map	Every report visible to everyone, immediately.	Founder	must
+Per-ward pages	364 addressable, indexable standing records.	Sitemap	must
+Accountability leaderboard	Constituencies ranked; more complaints push a representative down.	Press	must
+30-second flow	Performance target, not a feature — it is the product's actual promise.	Founder	must
+Share cards	Social sharing is the growth engine; OG image per entity.	Press	should
+BBMP WhatsApp forwarding	Reports pushed to the municipal WhatsApp complaint channel.	Founder	should
+Weekly automated emails	Digest to authorities listing complaints with coordinates.	Founder	should
+X auto-tagging	Bot tags the MLA's official account when a ward crosses a threshold.	Press	should
+Resolution tracking	Marking a report resolved. Weakest part of the original — build it properly.	Inferred	should
+Communities surface	RWA / neighbourhood grouping. Scope to be confirmed.	Sitemap	could
+Issue categories beyond garbage	Potholes and other civic issues; stated as roadmap.	Founder	could
+Authority dashboard	Analytics for officials; stated as roadmap.	Founder	could
+Public API	Open data access for journalists; stated as roadmap.	Founder	could
+5.0
+Primary user flows
+5.1  Report a dump — the 30-second path
+Visitor lands on / from a shared link, on a phone, standing in front of the garbage.
+Browser requests location permission. Grant → map centres and ward resolves. Deny → fall back to a manual pin drop plus ward search.
+Visitor taps the primary action; the capture sheet opens over the map.
+Camera fires. One photo. The sheet reads back the resolved ward and the responsible MLA and MP — this read-back is the emotional payload, do not skip it.
+Optional one-line description. Submit.
+Confirmation: the new pin, the ward's running total, and a share action pre-loaded with the ward and representative names.
+Server-side, asynchronously: forward to municipal channels, increment ward and constituency counters, evaluate the X-notification threshold.
+Design constraint: no step in this flow may block on a login, an OTP, a captcha or a category picker. Everything that protects the system against abuse has to happen after submit, invisibly. That is the single hardest engineering requirement in the whole product.
+
+5.2  Check on my area
+Visitor arrives at /ward/:slug, usually from search or a WhatsApp forward.
+Sees ward boundary, every open report, the ward's rank, and the two names responsible.
+Follows the MLA link to /mla/:constituency to see the constituency-wide picture.
+Shares the ward page into a resident group, or files their own report from the same page.
+5.3  Pressure loop (the one that makes it a product, not a form)
+Reports accumulate in a ward.
+Ward counters roll up into the constituency's leaderboard position, which falls.
+A threshold trips; the automated X post tags the representative publicly.
+The weekly digest reaches officials with coordinates attached.
+Resolution — if it happens — is recorded and the ward's standing recovers, which is the incentive the original has not yet closed.
+6.0
+Data model
+Proposed for the clone, matching observed behaviour. PostGIS assumed — ward resolution is a point-in-polygon query and should be done in the database, not the app.
+
+reports
+  id                uuid pk
+  created_at        timestamptz
+  photo_url         text            -- object storage
+  photo_thumb_url   text
+  location          geography(Point,4326)
+  ward_id           fk → wards     -- resolved at insert
+  description       text null
+  category          enum('garbage','debris','sewage','pothole',...)
+  status            enum('open','acknowledged','resolved','rejected','duplicate')
+  resolved_at       timestamptz null
+  resolution_photo_url text null
+  confirm_count     int default 0   -- "still here" signals
+  reporter_hash     text            -- salted device/IP hash, NOT identity
+  moderation_state  enum('pending','approved','flagged','removed')
+
+wards
+  id, name, slug unique, ward_number
+  boundary          geography(Polygon,4326)
+  centroid          geography(Point,4326)
+  assembly_constituency_id  fk → constituencies
+  parliamentary_constituency_id fk → constituencies
+  zone, population null
+
+constituencies
+  id, name, slug unique
+  type              enum('assembly','parliamentary')
+  boundary          geography(Polygon,4326)
+
+representatives
+  id, name, party, photo_url
+  constituency_id   fk → constituencies
+  role              enum('MLA','MP')
+  x_handle, email, phone null
+  term_start, term_end
+
+ward_stats  -- materialised, refreshed on write
+  ward_id pk, open_count, resolved_count, total_count
+  last_report_at, rank_city
+
+constituency_stats
+  constituency_id pk, open_count, resolved_count, resolution_rate
+  rank, rank_delta_7d
+
+escalations
+  id, report_id fk, channel enum('whatsapp','email','x')
+  sent_at, external_ref, response null
+
+communities  -- scope TBC, see §3
+  id, name, slug, type enum('rwa','apartment','collective')
+  ward_id fk, member_count, adopted_area geography null
+The reporter_hash decision
+Anonymous means anonymous — no account, no phone. But something must stop a single actor filing five hundred fake pins. Store a salted, rotating hash of device fingerprint plus coarse IP, never the raw values, use it only for rate-limiting and duplicate detection, and give it a short retention window. Write this policy down before you write the table, because it is the one place where a civic-trust product can quietly become a surveillance one.
+
+7.0
+API surface
+The original runs directly against Supabase from the browser, which means its client keys and table shape are visible in the bundle. For the clone, put a thin server in front — it is the only way to do abuse control, image processing and escalation without trusting the client.
+
+Endpoint	Method	Purpose	Notes
+/api/reports	POST	Create report	Multipart; rate-limited; strips EXIF; resolves ward server-side
+/api/reports	GET	List / filter	Bbox, ward, constituency, status, since; paginated
+/api/reports/:id	GET	Single report	
+/api/reports/:id/confirm	POST	"Still here"	Rate-limited per device hash
+/api/reports/:id/resolve	POST	Mark resolved	Requires evidence photo; moderated
+/api/geo/resolve	GET	lat,lng → ward + reps	Cached hard; this is the hot path
+/api/wards	GET	Ward list + stats	Feeds the ward directory
+/api/wards/:slug	GET	Ward detail	Boundary GeoJSON, reports, reps, rank
+/api/constituencies/:slug	GET	MLA/MP page data	Aggregates constituent wards
+/api/leaderboard	GET	Rankings	Sort by open count, resolution rate, or trend
+/api/stats	GET	City counters	Cached, drives the homepage numbers
+/api/geojson/wards	GET	Boundary tiles	Simplified geometry; serve as vector tiles, not one blob
+8.0
+Stack — theirs, and what I would change
+Layer	NammaKasa	Recommended for the clone	Why change
+Frontend	React + Vite, client-rendered SPA	Next.js (App Router) or Remix	387 public pages with zero server-rendered content is a real SEO and share-preview loss. Ward pages should render on the server with per-ward titles and OG images.
+Backend	Supabase, called from the browser	Supabase or Postgres + a thin API layer	Keeps abuse control, EXIF stripping and escalation off the client
+Geo	OpenStreetMap; ward boundaries from GitHub	PostGIS + MapLibre GL + self-hosted or Protomaps tiles	Point-in-polygon in the DB; tile costs stay predictable at scale
+Images	Supabase storage (assumed)	Object storage + on-the-fly resizing + EXIF stripping	Phone photos carry GPS and device metadata; publishing them raw is a privacy leak
+Hosting	Vercel	Vercel / Cloudflare	No change needed
+Escalation	WhatsApp, email, X automation	A job queue with retries and an audit trail	Escalation that silently fails is worse than none — every send needs a record
+Moderation	Not described	Vision model pre-screen + human queue	An anonymous public photo upload will receive abuse on day one
+9.0
+Non-functional requirements
+Performance
+Report submission complete in under 30 seconds on a mid-range Android over 4G, camera tap to confirmation. This is a product promise, so make it a CI budget.
+Client-side image compression before upload; never ship a 12 MP original over mobile data.
+Map renders with clustered pins; never load all reports as individual markers.
+Privacy and safety
+Strip EXIF from every uploaded image, server-side, before it is stored or served.
+Never store or display anything that identifies a reporter.
+Blur or reject images containing faces, vehicle plates or house numbers — reporting garbage should never expose a neighbour.
+Coarsen displayed coordinates slightly for reports adjacent to residential doors.
+Abuse resistance without friction
+Rate-limit by device hash and coarse IP, silently.
+Duplicate detection by spatial proximity plus time window plus image similarity.
+Reject reports whose coordinates fall outside the service area.
+Moderation queue with a public "flag" affordance; removals logged.
+Naming and defamation
+Naming real elected officials in a ranking is the product's whole point, and also its legal exposure. Rank on verifiable counts only, state the methodology on the page, publish a correction and takedown route, and never editorialise about a named individual in generated copy.
+Keep the representative roster current and dated — an out-of-date MLA attached to a complaint is both wrong and actionable.
+Accessibility, i18n, resilience
+Kannada and English at minimum; the original ships English only, which is a gap worth closing rather than copying.
+The whole flow must work without location permission.
+Offline-tolerant capture — queue a report taken in a dead spot and submit when connectivity returns.
+Installable PWA; the original already signals this in its meta.
+10.0
+Reference data you must source first
+Nothing in this product works before this data exists, and it is the part that cannot be vibe-coded. Budget real time for it.
+
+Ward boundaries as GeoJSON — the current set, matching whichever restructuring you are treating as authoritative. Openly available ward-boundary repositories for Bengaluru exist; verify polygon validity, closed rings, and that names match your slug scheme before you trust them.
+Assembly constituency boundaries and the ward-to-constituency mapping. A ward can straddle a constituency boundary — decide the tie-break rule and record it.
+Parliamentary constituency boundaries and their ward mapping.
+Current MLA roster for every assembly constituency in the service area, with party, official X handle and a source-of-record date.
+Current MP roster for every parliamentary constituency covering the city.
+Municipal complaint channel details — the WhatsApp number, the email routing, and whatever format an official complaint is expected to arrive in.
+Press reports put the original at 28 MLAs and 4 MPs, while its sitemap publishes 21 MLA pages — so its own roster is incomplete or its coverage area is narrower than claimed. Do not inherit that. Decide your service boundary explicitly and generate pages for every constituency inside it.
+
+11.0
+Open questions to settle from the live site
+Each of these changes the build. All are answerable in one walkthrough of the running app.
+
+What exactly is /communities? It carries the second-highest sitemap priority and is undocumented anywhere.
+Where does the leaderboard live, and what does it rank on — raw report count, per-capita, or resolution rate?
+How are MP pages surfaced given there is no /mp/ route?
+Exact fields in the report form — is there a category picker, a description, multiple photos?
+Is there any status lifecycle visible to the public, or are reports write-only?
+Can anyone mark a report resolved, and what evidence does that need?
+Which map library and tile provider — Leaflet, MapLibre, something else?
+Is the ward dataset 243 or 364 wards in the live UI, and which boundary vintage?
+What is captured in localStorage, and is there any device identifier?
+What do the empty states look like — a ward with zero reports is 300 of the 364 pages, so it is the most-viewed state in the product.
+12.0
+Suggested build sequence
+Ordered by dependency, not by visibility. Each phase is shippable.
+
+Phase	Deliverable	Contains
+1	Geo foundation	Boundary data loaded into PostGIS, ward and constituency tables seeded, representative roster entered, /api/geo/resolve working and tested against known coordinates
+2	Report pipeline	Capture sheet, image upload with EXIF stripping and compression, insert with server-side ward resolution, rate limiting
+3	Public map	Clustered map, report detail, city counters, the location-denied fallback path
+4	Entity pages	Server-rendered ward and constituency pages, per-entity OG images, sitemap generation
+5	Accountability layer	Stats rollups, leaderboard, ranking methodology page
+6	Escalation	Job queue, municipal channel forwarding, weekly digest, threshold-triggered social posts, full audit trail
+7	Loop closure	Resolution workflow with evidence, moderation queue, ward standing recovery — the part the original has not solved
+8	Reach	Kannada localisation, PWA install, offline capture queue, public read API
+13.0
+One note on what "clone" should mean here
+Rebuilding the functionality is entirely fair — a crowdsourced civic map with representative attribution is an idea, and the underlying data is public. What should not carry over is the identity: the NammaKasa name, its wordmark, its #DD3333 brand colour, its written copy, and any assets from the site. Those belong to its founder, who built the thing in a weekend and gave it away for free.
+
+Build the same machine under your own name. If you are targeting the same city, it is also worth asking whether a second competing map helps residents or splits the evidence base — the founder has said he intends to open-source it and expand nationally, so a different city, or a contribution upstream, may be the higher-leverage version of this project.
+
+Sources
+
+nammakasa.in — live metadata and sitemap.xml, retrieved 10 Sep 2026
+Startuppedia — founder interview: stack, integrations, launch, traction
+CXO Techbot — build cost, AI-assisted development, roadmap
+NewsFirst Prime — ward and representative counts, X auto-tagging, leaderboard mechanics
+Digit — leaderboard framing, adoption
+UsuallyCorrect — flow description, resolution figures
+The Better India — cumulative report count, founder framing
+News Karnataka — adoption figures, Greater Bengaluru Authority plans
+Civic Tech Field Guide — project classification and social handles

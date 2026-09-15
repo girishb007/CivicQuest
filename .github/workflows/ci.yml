@@ -1,0 +1,56 @@
+name: Local acceptance
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: civicquest
+          POSTGRES_PASSWORD: civicquest
+          POSTGRES_DB: civicquest_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U civicquest"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      CQ_ENV: test
+      CQ_DATABASE_URL: postgresql+psycopg://civicquest:civicquest@localhost:5432/civicquest_test
+      CQ_TEST_DATABASE_URL: postgresql+psycopg://civicquest:civicquest@localhost:5432/civicquest_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.12.13'
+          python-version: '3.12'
+      - run: uv sync --frozen --extra dev
+      - run: uv run ruff check apps/api tests/backend
+      - run: uv run alembic upgrade head
+      - run: uv run pytest tests/backend -q
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '10.17.1'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm build
+  infrastructure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.9.8'
+      - run: terraform fmt -check -recursive infrastructure/terraform
+      - run: terraform -chdir=infrastructure/terraform init -backend=false -input=false
+      - run: terraform -chdir=infrastructure/terraform validate

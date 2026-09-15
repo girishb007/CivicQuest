@@ -19,6 +19,23 @@ build/
 coverage/
 .expo/
 .next/
+.venv/
+.cache/
+.local/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+.coverage
+htmlcov/
+playwright-report/
+test-results/
+.terraform/
+*.tfstate*
+*.tfvars
+!*.tfvars.example
 
 # Logs
 *.log
