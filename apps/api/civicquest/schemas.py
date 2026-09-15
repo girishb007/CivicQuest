@@ -190,4 +190,19 @@ class Redaction(Input):
 
     @model_validator(mode="after")
     def bounds(self):
- 
+        for x, y, w, h in self.boxes:
+            if not (0 <= x < 1 and 0 <= y < 1 and 0 < w <= 1 - x and 0 < h <= 1 - y):
+                raise ValueError("Redaction boxes must fit within normalized image coordinates")
+        return self
+
+
+class Push(Input):
+    endpoint: str = Field(max_length=2048)
+    keys: dict[str, str]
+    expirationTime: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+
+
+class NotificationPreferences(Input):
+    report_updates: bool = True
+    action_reminders: bool = True
+    push: bool = False

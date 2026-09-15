@@ -377,4 +377,9 @@ def quests(db, user):
             {
                 **q,
                 "progress": min(n, q["target"]),
-                "claimable":
+                "claimable": n >= q["target"] and not claimed,
+                "completed": bool(claimed),
+                "period_key": period,
+            }
+        )
+    return result

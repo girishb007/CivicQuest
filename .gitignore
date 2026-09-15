@@ -19,6 +19,7 @@ build/
 coverage/
 .expo/
 .next/
+*.tsbuildinfo
 .venv/
 .cache/
 .local/

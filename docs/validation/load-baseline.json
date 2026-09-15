@@ -1,0 +1,17 @@
+{
+  "reports": 100008,
+  "concurrent_users": 50,
+  "failures": [],
+  "measurements": {
+    "feed": {
+      "requests": 150,
+      "p50_ms": 370.45,
+      "p95_ms": 661.68
+    },
+    "map": {
+      "requests": 150,
+      "p50_ms": 553.38,
+      "p95_ms": 923.94
+    }
+  }
+}

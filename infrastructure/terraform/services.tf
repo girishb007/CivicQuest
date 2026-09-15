@@ -299,4 +299,116 @@ resource "aws_ecs_task_definition" "app" {
 resource "aws_ecs_service" "app" {
 
 
-  for_each = toset(["api", "work
+  for_each = toset(["api", "worker", "web"])
+
+  name = each.key
+
+  cluster = aws_ecs_cluster.main.id
+
+  task_definition = aws_ecs_task_definition.app[each.key].arn
+
+  desired_count = 0
+
+  launch_type = "FARGATE"
+  deployment_circuit_breaker {
+
+    enable   = true
+    rollback = true
+  }
+  network_configuration {
+
+    subnets          = var.private_subnet_ids
+    security_groups  = [aws_security_group.app.id]
+    assign_public_ip = false
+  }
+  dynamic "load_balancer" {
+
+
+    for_each = each.key == "web" ? [1] : []
+    content {
+
+      target_group_arn = aws_lb_target_group.web.arn
+      container_name   = "web"
+      container_port   = 3000
+    }
+
+  }
+  dynamic "service_registries" {
+
+
+    for_each = each.key == "api" ? [1] : []
+    content {
+
+      registry_arn = aws_service_discovery_service.api.arn
+    }
+
+  }
+
+  depends_on = [aws_lb_listener.https]
+  lifecycle {
+
+    ignore_changes = [desired_count]
+  }
+
+}
+resource "aws_sns_topic" "alerts" {
+
+  name = "${var.name}-alerts"
+}
+resource "aws_sns_topic_subscription" "alerts" {
+
+
+  topic_arn = aws_sns_topic.alerts.arn
+
+  protocol = "email"
+
+  endpoint = var.alarm_email
+
+}
+resource "aws_cloudwatch_metric_alarm" "queue_age" {
+
+
+  alarm_name = "${var.name}-queue-age"
+
+  namespace = "AWS/SQS"
+
+  metric_name = "ApproximateAgeOfOldestMessage"
+
+  dimensions = {
+
+    QueueName = aws_sqs_queue.jobs.name
+  }
+
+  comparison_operator = "GreaterThanThreshold"
+
+  threshold = 300
+
+  evaluation_periods = 2
+
+  period = 60
+
+  statistic = "Maximum"
+
+  alarm_actions = [aws_sns_topic.alerts.arn]
+
+}
+output "cluster" {
+
+  value = aws_ecs_cluster.main.name
+}
+output "migration_task" {
+
+  value = aws_ecs_task_definition.app["migration"].arn
+}
+output "database_host" {
+
+  value = aws_db_instance.main.address
+}
+output "database_secret_arn" {
+
+  value = aws_db_instance.main.master_user_secret[0].secret_arn
+}
+output "alb_dns_name" {
+
+  value = aws_lb.web.dns_name
+}

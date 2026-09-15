@@ -45,4 +45,87 @@ def import_representatives(db, document):
         row.effective_to = item.get("effective_to")
         row.reviewed = bool(item["reviewed"])
         row.fetched_at = snapshot_at
-     
+        imported.append(row)
+    db.flush()
+    return imported
+
+
+def import_postal_places(db, rows, metadata):
+    required = {"source_url", "version", "fetched_at"}
+    if not required.issubset(metadata):
+        fail("POSTAL_PROVENANCE_REQUIRED", "Postal source, version and fetch time are required")
+    fetched_at = datetime.fromisoformat(metadata["fetched_at"].replace("Z", "+00:00"))
+    db.execute(update(PostalPlace).values(active=False))
+    imported = []
+    seen = set()
+    for item in rows:
+        if item.get("District", "").strip().upper() not in {"MUMBAI", "MUMBAI SUBURBAN"}:
+            continue
+        code, office = item.get("Pincode", "").strip(), item.get("OfficeName", "").strip()
+        key = (code, office)
+        if len(code) != 6 or not code.isdigit() or not office or key in seen:
+            continue
+        seen.add(key)
+        try:
+            lat, lng = float(item["Latitude"]), float(item["Longitude"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        # Keep only points inside the active Greater Mumbai coverage polygon.
+        covered = db.scalar(select(Area.id).where(Area.area_type == "city", Area.active.is_(True),
+                                                  func.ST_Covers(Area.boundary, point(lat, lng))))
+        if not covered:
+            continue
+        row = db.scalar(select(PostalPlace).where(PostalPlace.pincode == code,
+                                                  PostalPlace.office_name == office))
+        if not row:
+            row = PostalPlace(pincode=code, office_name=office, district=item["District"],
+                              location=point(lat, lng), source_url=metadata["source_url"],
+                              source_version=metadata["version"], fetched_at=fetched_at)
+            db.add(row)
+        else:
+            row.location = point(lat, lng)
+            row.district = item["District"]
+            row.source_url = metadata["source_url"]
+            row.source_version = metadata["version"]
+            row.fetched_at = fetched_at
+            row.active = True
+        imported.append(row)
+    db.flush()
+    return imported
+
+
+def import_bmc_ward_offices(db, document, metadata):
+    required = {"source_url", "verified_at"}
+    if document.get("type") != "FeatureCollection" or not required.issubset(metadata):
+        fail("INVALID_BMC_OFFICE_SNAPSHOT", "BMC office features need source and verification time")
+    verified_at = datetime.fromisoformat(metadata["verified_at"].replace("Z", "+00:00"))
+    imported = []
+    for feature in document.get("features", []):
+        properties = feature.get("properties", {})
+        ward_code = properties.get("WARD_NAME", "").strip()
+        area = db.scalar(select(Area).where(Area.code == "BMC-" + ward_code.replace("/", "-"),
+                                            Area.area_type == "ward", Area.active.is_(True)))
+        if not area:
+            fail("BMC_WARD_MISSING", f"Import BMC ward {ward_code} before its office", 409)
+        contacts = [("BMC Ward Office", properties.get("BRD_LINE_N")),
+                    ("BMC Ward Control Room", properties.get("CNTRL_ROOM"))]
+        for title, phone in contacts:
+            phone = (phone or "").strip()
+            if len(phone.replace("-", "")) < 8:
+                continue
+            row = db.scalar(select(Officer).where(Officer.area_id == area.id, Officer.title == title,
+                                                  Officer.source_url == metadata["source_url"]))
+            if not row:
+                row = Officer(name=f"{ward_code} {title}", title=title,
+                              department="Brihanmumbai Municipal Corporation", area_id=area.id,
+                              reason="Official administrative ward contact published by BMC. Operational "
+                                     "ownership still depends on the issue category.",
+                              source_url=metadata["source_url"], verified_at=verified_at, phone=phone,
+                              official_url=metadata["source_url"], reviewed=True)
+                db.add(row)
+            else:
+                row.name, row.phone, row.verified_at = f"{ward_code} {title}", phone, verified_at
+                row.reviewed, row.effective_to = True, None
+            imported.append(row)
+    db.flush()
+    return imported
