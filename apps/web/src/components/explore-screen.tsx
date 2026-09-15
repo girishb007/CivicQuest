@@ -1,7 +1,7 @@
 'use client';
 
 import {useQuery} from '@tanstack/react-query';
-import {ArrowRight, Compass, List, LocateFixed, Map as MapIcon, MapPin, Navigation, Plus, Search, ShieldCheck, X} from 'lucide-react';
+import {ArrowRight, Compass, List, LocateFixed, Map as MapIcon, MapPin, Navigation, Search, ShieldCheck, X} from 'lucide-react';
 import Link from 'next/link';
 import {useEffect, useRef, useState} from 'react';
 
@@ -106,7 +106,6 @@ export function ExploreScreen({cfg, notify}: Props) {
       {!ready || nearby.isPending || geometry.isPending ? <LoadingMap/> : list ? <ReportList items={items} select={(id) => select({kind: 'report', id})}/> : <CityMap items={items} geo={geometry.data} providerKey={cfg.maptiler_key} center={center} viewport={viewport} onViewport={(next) => set('viewport', next)} onReportSelect={(id) => select({kind: 'report', id})} onAreaSelect={(id) => select({kind: 'area', id})}/>} 
       <div className="map-civic-legend"><span><i className="low"/>Low</span><span><i className="medium"/>Medium</span><span><i className="high"/>High</span><span><i className="resolved"/>Resolved</span><button onClick={async () => { try { const position = await locate(); set('center', position); set('viewport', undefined); set('radius', 3000); notify('Showing reports near your location.'); } catch (caught: any) { notify(caught.message); } }}><LocateFixed size={14}/>Locate</button></div>
     </section>
-    <Link className="floating-capture" href="/capture"><Plus size={21}/>Capture</Link>
     {selection?.kind === 'report' && selectedReport && <ReportSheet report={selectedReport} close={close}/>} 
     {selection?.kind === 'area' && <AreaSheet id={selection.id} close={close}/>} 
   </>;
